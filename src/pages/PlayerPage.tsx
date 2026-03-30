@@ -89,7 +89,15 @@ export default function PlayerPage() {
 
       const resHist = await fetch(`${UPSTASH_URL}/get/draw_history`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
       const dataHist = await resHist.json();
-      setHistory(safeJSONParse(dataHist.result, []));
+      const rawHistory = safeJSONParse(dataHist.result, []);
+      
+      // 過濾掉超過 72 小時的舊紀錄
+      const SEVENTY_TWO_HOURS = 72 * 60 * 60 * 1000;
+      const validHistory = (Array.isArray(rawHistory) ? rawHistory : []).filter((item: any) => {
+        if (!item.timestamp) return false; 
+        return (Date.now() - item.timestamp) < SEVENTY_TWO_HOURS;
+      });
+      setHistory(validHistory);
 
       // 獲取並格式化待審核清單 (兼容舊的純字串資料)
       const resPend = await fetch(`${UPSTASH_URL}/get/pending_punishments`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
@@ -153,7 +161,25 @@ export default function PlayerPage() {
     setSpinStatus('spinning');
     setResult(null); 
     
+    // 1. 立即決定最終結果
     const finalResult = punishments[Math.floor(Math.random() * punishments.length)];
+    
+    // 2. 防作弊核心：在動畫開始前，"立即" 寫入後端資料庫
+    const newEntry = { text: finalResult, time: new Date().toLocaleString(), timestamp: Date.now() };
+    const SEVENTY_TWO_HOURS = 72 * 60 * 60 * 1000;
+    
+    // 過濾出 72 小時內的歷史，加上最新這筆，並嚴格保留最多 50 筆 (slice(0, 50) 會丟棄第 51 筆最舊紀錄)
+    const currentHistory = Array.isArray(history) ? history : [];
+    const validHistory = currentHistory.filter(item => item.timestamp && (Date.now() - item.timestamp) < SEVENTY_TWO_HOURS);
+    const updatedHistoryForDB = [newEntry, ...validHistory].slice(0, 50);
+
+    // 背景發送 API 鎖定抽獎結果，玩家重整也無效
+    fetch(`${UPSTASH_URL}/set/draw_history`, { 
+      method: 'POST', 
+      headers: { Authorization: `Bearer ${HIDDEN_WRITE_TOKEN}`, 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(updatedHistoryForDB) 
+    }).catch(err => console.error("History save error:", err));
+
     const newTape = Array.from({ length: 70 }, () => punishments[Math.floor(Math.random() * punishments.length)]);
     const targetIndex = 45 + Math.floor(Math.random() * 10);
     newTape[targetIndex] = finalResult; 
@@ -183,7 +209,10 @@ export default function PlayerPage() {
       setTimeout(() => {
         setSpinStatus('idle');
         setResult(finalResult);
-        saveHistory(finalResult);
+        
+        // 動畫完全播完後，才更新畫面上的歷史紀錄列表，避免提前暴雷
+        setHistory(updatedHistoryForDB);
+        
         playWinSound();
         if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([100, 50, 100]); 
         const defaults: confetti.Options = { spread: 360, ticks: 100, gravity: 0.5, decay: 0.94, startVelocity: 30, shapes: ['star'], colors: ['#FFE400', '#FFBD00', '#E89400', '#FFCA6C', '#FDFFB8', '#9333ea', '#ec4899'] };
@@ -192,15 +221,6 @@ export default function PlayerPage() {
         setTimeout(() => confetti({ ...defaults, particleCount: 50, origin: { x: 0.8, y: 0.6 } }), 400);
       }, 850);
     }, spinDuration); 
-  };
-
-  const saveHistory = async (drawnText: string) => {
-    const newEntry = { text: drawnText, time: new Date().toLocaleString(), timestamp: Date.now() };
-    const newHistory = [newEntry, ...history].slice(0, 50);
-    try {
-      await fetch(`${UPSTASH_URL}/set/draw_history`, { method: 'POST', headers: { Authorization: `Bearer ${HIDDEN_WRITE_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify(newHistory) });
-      setHistory(newHistory);
-    } catch (err) {}
   };
 
   const handleSubmitSuggestion = async (e: React.FormEvent) => {
