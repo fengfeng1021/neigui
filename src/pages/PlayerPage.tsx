@@ -177,7 +177,7 @@ export default function PlayerPage() {
             navigator.vibrate([100, 50, 100]); 
         }
 
-        const defaults: confetti.Options = { spread: 360, ticks: 100, gravity: 0.5, decay: 0.94, startVelocity: 30, shapes: ['star'], colors: ['#FFE400', '#FFBD00', '#E89400', '#FFCA6C', '#FDFFB8', '#9333ea', '#ec4899'], useWorker: true };
+        const defaults: confetti.Options = { spread: 360, ticks: 100, gravity: 0.5, decay: 0.94, startVelocity: 30, shapes: ['star'], colors: ['#FFE400', '#FFBD00', '#E89400', '#FFCA6C', '#FDFFB8', '#9333ea', '#ec4899'] };
         confetti({ ...defaults, particleCount: 80, origin: { x: 0.5, y: 0.5 } });
         setTimeout(() => confetti({ ...defaults, particleCount: 50, origin: { x: 0.2, y: 0.6 } }), 200);
         setTimeout(() => confetti({ ...defaults, particleCount: 50, origin: { x: 0.8, y: 0.6 } }), 400);
