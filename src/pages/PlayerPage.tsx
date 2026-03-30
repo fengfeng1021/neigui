@@ -53,11 +53,12 @@ const playWinSound = () => {
 // ================= 主程式 =================
 export default function PlayerPage() {
   const [punishments, setPunishments] = useState<string[]>([]);
-  const [history, setHistory] = useState<{text: string, time: string, timestamp?: number}[]>([]);
+  const [history, setHistory] = useState<{playerId?: string, text: string, time: string, timestamp?: number}[]>([]);
   const [pendingList, setPendingList] = useState<PendingItem[]>([]);
   const [votedIds, setVotedIds] = useState<string[]>([]);
   const [spinStatus, setSpinStatus] = useState<'idle' | 'spinning' | 'landed'>('idle');
   const [result, setResult] = useState<string | null>(null);
+  const [playerId, setPlayerId] = useState("");
   
   const [tape, setTape] = useState<string[]>([]);
   const [winIndex, setWinIndex] = useState(-1); 
@@ -166,7 +167,7 @@ export default function PlayerPage() {
     
     // 2. 防作弊核心：在動畫開始前，"立即" 寫入後端資料庫
     const now = Date.now();
-    const newEntry = { text: finalResult, time: new Date().toLocaleString(), timestamp: now };
+    const newEntry = { playerId: playerId.trim() || '匿名', text: finalResult, time: new Date().toLocaleString(), timestamp: now };
     const SEVENTY_TWO_HOURS = 72 * 60 * 60 * 1000;
     
     // 計算這一次要寫入 DB 的歷史紀錄
@@ -490,8 +491,16 @@ export default function PlayerPage() {
               )}
             </AnimatePresence>
 
-            <div className="absolute bottom-6 z-20">
-              <button onClick={handleDraw} disabled={spinStatus !== 'idle' || punishments.length === 0} className="px-14 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xl font-bold rounded-full shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:hover:scale-100">
+            <div className="absolute bottom-6 z-20 flex flex-col items-center gap-3">
+              <input 
+                type="text" 
+                value={playerId} 
+                onChange={(e) => setPlayerId(e.target.value)} 
+                placeholder="在此输入你的ID" 
+                className="px-4 py-2 rounded-xl border-2 border-purple-300 focus:border-purple-500 outline-none text-center font-bold text-gray-700 bg-white/90 shadow-sm w-48 transition-all"
+                disabled={spinStatus !== 'idle'}
+              />
+              <button onClick={handleDraw} disabled={spinStatus !== 'idle' || punishments.length === 0 || !playerId.trim()} className="px-14 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xl font-bold rounded-full shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:hover:scale-100">
                 {spinStatus !== 'idle' ? '系统抽取中...' : '开始抽取'}
               </button>
             </div>
@@ -508,7 +517,10 @@ export default function PlayerPage() {
                 <div className="flex flex-col gap-2">
                   {history.map((item, index) => (
                     <div key={index} className="flex justify-between items-center bg-white/80 p-3 rounded-2xl border border-pink-50 hover:border-pink-200 transition-colors">
-                      <span className="font-bold text-gray-700 text-sm flex-1 break-words mr-4">{item.text}</span>
+                      <span className="font-bold text-gray-700 text-sm flex-1 break-words mr-4">
+                        <span className="text-purple-600 mr-2">[{item.playerId || '匿名'}]</span>
+                        {item.text}
+                      </span>
                       <span className="text-xs text-gray-400 font-medium bg-gray-100 px-2 py-1 rounded-full whitespace-nowrap">{item.time.split(' ')[1]}</span>
                     </div>
                   ))}
