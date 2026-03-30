@@ -454,7 +454,7 @@ export default function PlayerPage() {
           {/* 區塊 B：玩家投票區 */}
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }} className="w-full bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-5 shadow-sm flex flex-col h-[400px]">
              <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center justify-between border-b border-gray-200 pb-3">
-              <div className="flex items-center gap-2"><Vote size={20} className="text-pink-500"/> 待审核惩罚投票 </div>
+              <div className="flex items-center gap-2"><Vote size={20} className="text-pink-500"/> 待审核惩罚投票（满10票自动通过） </div>
               <span className="text-xs bg-pink-100 text-pink-600 px-2 py-1 rounded-full">{pendingList.length} 个待审</span>
             </h3>
             <p className="text-xs text-gray-500 mb-4">管理觉得一般或看不懂所以放着没管 大家觉得好玩就通过</p>
