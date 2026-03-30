@@ -329,10 +329,36 @@ export default function PlayerPage() {
         ::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover, .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(168, 85, 247, 0.8); }
       `}</style>
 
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="z-10 flex flex-col items-center my-6">
-        <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500 tracking-wide drop-shadow-sm flex items-center">
-          惩罚扭蛋机
-        </h1>
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="z-10 flex flex-col items-center my-6 w-full relative">
+        <div className="relative w-full py-6 flex items-center justify-center drop-shadow-[0_0_8px_#3b82f6] drop-shadow-[0_0_16px_#9333ea] drop-shadow-[0_0_35px_rgba(168,85,247,0.9)]">
+          
+          {/* 背景能量场与动态速度线 */}
+          <div className="absolute inset-0 flex items-center justify-center -z-10 pointer-events-none">
+            {/* 核心模糊光晕 */}
+            <div className="absolute w-[250px] h-[100px] bg-[radial-gradient(circle,rgba(147,51,234,0.6)_0%,transparent_60%)] blur-2xl"></div>
+            {/* 旋转速度线 */}
+            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="absolute w-[350px] h-[350px] bg-[repeating-conic-gradient(transparent_0deg,rgba(168,85,247,0.2)_15deg,transparent_30deg,rgba(59,130,246,0.2)_45deg)] opacity-70 blur-xl" style={{ WebkitMaskImage: 'radial-gradient(circle, black 0%, transparent 65%)', maskImage: 'radial-gradient(circle, black 0%, transparent 65%)' }}></motion.div>
+          </div>
+
+          {/* 飞溅的蓝色/紫色粒子 */}
+          <div className="absolute inset-0 flex items-center justify-center -z-10 pointer-events-none">
+            <motion.div animate={{ y: [-20, 20, -20], x: [-10, 10, -10], opacity: [0, 1, 0] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }} className="absolute top-[10%] left-[25%] md:left-[35%] w-2 h-2 bg-blue-300 rounded-full shadow-[0_0_10px_#60a5fa]"></motion.div>
+            <motion.div animate={{ y: [20, -20, 20], x: [10, -10, 10], opacity: [0, 1, 0] }} transition={{ repeat: Infinity, duration: 3, ease: "easeInOut", delay: 0.5 }} className="absolute bottom-[10%] right-[25%] md:right-[35%] w-3 h-3 bg-purple-300 rounded-full shadow-[0_0_15px_#a855f7]"></motion.div>
+            <motion.div animate={{ scale: [0.5, 1.5, 0.5], opacity: [0, 0.8, 0] }} transition={{ repeat: Infinity, duration: 1.5, delay: 1 }} className="absolute top-[70%] right-[20%] md:right-[38%] w-1.5 h-1.5 bg-indigo-200 rounded-full shadow-[0_0_8px_#818cf8]"></motion.div>
+            <motion.div animate={{ scale: [0.8, 1.2, 0.8], opacity: [0, 0.9, 0] }} transition={{ repeat: Infinity, duration: 2.5, delay: 0.2 }} className="absolute bottom-[70%] left-[20%] md:left-[38%] w-2.5 h-2.5 bg-purple-200 rounded-full shadow-[0_0_12px_#d8b4fe]"></motion.div>
+          </div>
+
+          {/* 底层：粗外框层 (6px 描边) */}
+          <h1 className="absolute text-5xl md:text-6xl font-black tracking-widest text-transparent [-webkit-text-stroke:6px_#2e1065] text-center flex items-center">
+            惩罚扭蛋机
+          </h1>
+          
+          {/* 顶层：渐层文字层 (高饱和度彩色渐变，无描边) */}
+          <h1 className="relative text-5xl md:text-6xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-pink-400 to-purple-500 text-center flex items-center">
+            惩罚扭蛋机
+          </h1>
+          
+        </div>
       </motion.div>
 
       <div className="z-10 w-full max-w-[105rem] mx-auto px-4 lg:px-8 flex flex-col lg:grid lg:grid-cols-10 gap-6 lg:gap-8 items-start justify-center">
@@ -395,10 +421,43 @@ export default function PlayerPage() {
 
             <AnimatePresence>
               {spinStatus === 'idle' && result && (
-                <motion.div key="result" initial={{ scale: 0.3, opacity: 0, y: 30 }} animate={{ scale: 1, opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 200, damping: 15 }} className={`absolute font-black text-transparent bg-clip-text bg-gradient-to-br from-purple-700 via-pink-600 to-orange-500 drop-shadow-[0_4px_4px_rgba(0,0,0,0.15)] w-full px-4 text-center break-words whitespace-normal py-2 ${getDynamicTextSize(result)}`}>{result}</motion.div>
+                <motion.div key="result" initial={{ scale: 0.3, opacity: 0, y: 30 }} animate={{ scale: 1, opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 200, damping: 15 }} className="absolute w-full px-4 flex flex-col items-center justify-center pointer-events-none">
+                  
+                  {/* 背景能量場與動態速度線 (已調整為深紫-桃粉色調) */}
+                  <div className="absolute inset-0 flex items-center justify-center -z-10">
+                    {/* 核心模糊光暈 - 調整為較強烈、深邃的紫色核心 */}
+                    <div className="absolute w-[150%] h-[200%] bg-[radial-gradient(circle,rgba(88,28,135,0.7)_0%,transparent_65%)] blur-2xl"></div>
+                    {/* 旋轉速度線 - 調整為紫色到桃粉色的間隔 */}
+                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 20, ease: "linear" }} className="absolute w-[200%] h-[300%] bg-[repeating-conic-gradient(transparent_0deg,rgba(107,33,168,0.2)_15deg,transparent_30deg,rgba(244,114,182,0.25)_45deg)] opacity-70 blur-xl" style={{ WebkitMaskImage: 'radial-gradient(circle, black 0%, transparent 65%)', maskImage: 'radial-gradient(circle, black 0%, transparent 65%)' }}></motion.div>
+                  </div>
+
+                  {/* 飛濺的紫桃色粒子 (全數調整色調) */}
+                  <div className="absolute inset-0 flex items-center justify-center -z-10">
+                    <motion.div animate={{ y: [-20, 20, -20], x: [-10, 10, -10], opacity: [0, 1, 0] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }} className="absolute top-[-20%] left-[20%] w-2 h-2 bg-pink-300 rounded-full shadow-[0_0_10px_#f472b6]"></motion.div>
+                    <motion.div animate={{ y: [20, -20, 20], x: [10, -10, 10], opacity: [0, 1, 0] }} transition={{ repeat: Infinity, duration: 3, ease: "easeInOut", delay: 0.5 }} className="absolute bottom-[-30%] right-[25%] w-3 h-3 bg-purple-400 rounded-full shadow-[0_0_15px_#8b5cf6]"></motion.div>
+                    <motion.div animate={{ scale: [0.5, 1.5, 0.5], opacity: [0, 0.8, 0] }} transition={{ repeat: Infinity, duration: 1.5, delay: 1 }} className="absolute top-[30%] right-[10%] w-1.5 h-1.5 bg-pink-200 rounded-full shadow-[0_0_8px_#f472b6]"></motion.div>
+                    <motion.div animate={{ scale: [0.8, 1.2, 0.8], opacity: [0, 0.9, 0] }} transition={{ repeat: Infinity, duration: 2.5, delay: 0.2 }} className="absolute bottom-[20%] left-[15%] w-2.5 h-2.5 bg-purple-300 rounded-full shadow-[0_0_12px_#a78bfa]"></motion.div>
+                  </div>
+
+                  {/* 主文字 (調整發光與外框為深紫-桃粉漸層) */}
+                  <div className="relative w-full py-4 flex items-center justify-center drop-shadow-[0_0_8px_#818cf8] drop-shadow-[0_0_20px_#a855f7] drop-shadow-[0_0_40px_rgba(244,114,182,0.8)]">
+                    
+                    {/* 底層：粗外框層 (6px 透明描邊 + 深紫-桃粉漸層背景，製造出深邃外框感) */}
+                    <span className={`absolute w-full font-black tracking-widest text-transparent [-webkit-text-stroke:6px_transparent] bg-clip-text bg-gradient-to-r from-purple-800 to-pink-400 text-center break-words whitespace-normal ${getDynamicTextSize(result)}`}>
+                      {result}
+                    </span>
+                    
+                    {/* 頂層：漸層文字層 (純淨的白色系漸層，無描邊，讓內部白色最大化) */}
+                    <span className={`relative w-full font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-blue-100 text-center break-words whitespace-normal ${getDynamicTextSize(result)}`}>
+                      {result}
+                    </span>
+                    
+                  </div>
+                  
+                </motion.div>
               )}
               {spinStatus === 'idle' && !result && (
-                <motion.div key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute text-2xl font-bold text-gray-400 text-center">
+                <motion.div key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute text-2xl font-bold text-gray-400 text-center pointer-events-none">
                   {punishments.length === 0 ? "请先添加惩罚" : "准备就绪"}
                 </motion.div>
               )}
