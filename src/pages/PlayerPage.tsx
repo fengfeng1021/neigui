@@ -42,22 +42,19 @@ export default function PlayerPage() {
     fetchData();
   }, []);
 
-  // 【新增功能 1】自適應字體大小計算器
   const getDynamicTextSize = (text: string) => {
     if (!text) return "text-4xl md:text-6xl";
-    if (text.length > 25) return "text-lg md:text-2xl leading-snug"; // 字數極多
-    if (text.length > 15) return "text-2xl md:text-3xl leading-snug"; // 字數偏多
-    if (text.length > 8) return "text-3xl md:text-4xl leading-tight"; // 字數中等
-    return "text-4xl md:text-6xl tracking-wide"; // 字數極少
+    if (text.length > 25) return "text-lg md:text-2xl leading-snug";
+    if (text.length > 15) return "text-2xl md:text-3xl leading-snug";
+    if (text.length > 8) return "text-3xl md:text-4xl leading-tight";
+    return "text-4xl md:text-6xl tracking-wide";
   };
 
   const handleDraw = () => {
     if (punishments.length === 0 || isSpinning) return;
     setIsSpinning(true);
     
-    // 記住上一次的結果用來比對，所以這裡不要 setResult(null)
     const lastResult = result;
-
     let counter = 0;
     const maxSpins = 25;
     
@@ -69,14 +66,13 @@ export default function PlayerPage() {
       if (counter >= maxSpins) {
         clearInterval(spinInterval);
         
-        // 【新增功能 2】防連抽機制 (確保 100% 跟上一次不一樣)
         let finalIndex;
         if (punishments.length > 1) {
           do {
             finalIndex = Math.floor(Math.random() * punishments.length);
           } while (punishments[finalIndex] === lastResult);
         } else {
-          finalIndex = 0; // 只有一個懲罰時只能抽它
+          finalIndex = 0;
         }
 
         const finalResult = punishments[finalIndex];
@@ -127,12 +123,10 @@ export default function PlayerPage() {
 
   return (
     <div className="min-h-screen bg-[#f3f4f6] flex flex-col items-center p-4 md:p-6 relative overflow-x-hidden text-gray-800">
-      {/* 柔和背景光暈 (Aura) */}
       <div className="absolute top-0 -left-20 w-[30rem] h-[30rem] bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob"></div>
       <div className="absolute top-40 -right-20 w-[30rem] h-[30rem] bg-pink-300 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-2000"></div>
       <div className="absolute -bottom-32 left-1/3 w-[30rem] h-[30rem] bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-4000"></div>
 
-      {/* 頂部標題 */}
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="z-10 flex flex-col items-center my-6">
         <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500 tracking-wide drop-shadow-sm flex items-center gap-3">
           <Sparkles className="text-pink-500" size={36} /> 惩罚扭蛋机
@@ -140,11 +134,12 @@ export default function PlayerPage() {
         <p className="text-gray-500 font-medium mt-2 tracking-widest text-sm">SURVIVAL_ROULETTE // PROTOCOL</p>
       </motion.div>
 
-      {/* 三欄式網格佈局 */}
-      <div className="z-10 w-full max-w-7xl grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+      {/* 佈局容器：將 max-w 加寬，並使用 12 欄網格分配 */}
+      <div className="z-10 w-full max-w-[90rem] flex flex-col lg:grid lg:grid-cols-12 gap-6 items-start">
         
-        {/* ================= 左側：當前懲罰池 ================= */}
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} className="lg:col-span-1 bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-5 shadow-sm flex flex-col h-[600px]">
+        {/* ================= 左側：當前懲罰池 (佔 4/12 欄) - 手機排第 3 ================= */}
+        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} 
+          className="order-3 lg:order-1 lg:col-span-4 w-full bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-5 shadow-sm flex flex-col h-[600px] lg:h-[750px]">
           <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-200 pb-3">
             <List size={20} className="text-purple-500"/> 当前惩罚池 ({punishments.length})
           </h3>
@@ -154,8 +149,10 @@ export default function PlayerPage() {
             ) : (
               <div className="flex flex-col gap-3">
                 {punishments.map((p, index) => (
-                  <div key={index} className="bg-white/80 p-4 rounded-2xl border border-purple-50 shadow-sm text-gray-700 font-bold hover:border-purple-200 hover:shadow-md transition-all text-sm break-words">
-                    {p}
+                  <div key={index} className="bg-white/80 p-4 rounded-2xl border border-purple-50 shadow-sm text-gray-700 font-bold hover:border-purple-200 hover:shadow-md transition-all text-sm break-words flex gap-2">
+                    {/* 加入動態編號，顏色稍淡以凸顯內文 */}
+                    <span className="text-purple-400 font-black min-w-[1.5rem]">{index + 1}.</span> 
+                    <span>{p}</span>
                   </div>
                 ))}
               </div>
@@ -163,12 +160,9 @@ export default function PlayerPage() {
           </div>
         </motion.div>
 
-        {/* ================= 中間：抽獎區與歷史記錄 ================= */}
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          {/* 核心抽獎卡片 */}
+        {/* ================= 中間：抽獎區與歷史記錄 (佔 5/12 欄) - 手機排第 1 ================= */}
+        <div className="order-1 lg:order-2 lg:col-span-5 w-full flex flex-col gap-6">
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full h-[380px] bg-white/50 backdrop-blur-xl border border-white/80 rounded-3xl shadow-sm flex flex-col items-center justify-center relative overflow-hidden p-6 text-center">
-            
-            {/* 抽獎文字顯示區 (已加入 break-words 和自動縮小) */}
             <div className="w-full px-4 mb-16 flex items-center justify-center h-full">
               <AnimatePresence mode="wait">
                 {isSpinning ? (
@@ -188,7 +182,6 @@ export default function PlayerPage() {
                 )}
               </AnimatePresence>
             </div>
-            
             <div className="absolute bottom-8">
               <button onClick={handleDraw} disabled={isSpinning || punishments.length === 0} className="px-14 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xl font-bold rounded-full shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:hover:scale-100">
                 {isSpinning ? '抽取中...' : '开始抽取'}
@@ -196,12 +189,12 @@ export default function PlayerPage() {
             </div>
           </motion.div>
 
-          {/* 歷史記錄卡片 */}
+          {/* 歷史記錄卡片 (增高 max-h-72) */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-5 shadow-sm">
             <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2 border-b border-gray-200 pb-2">
               <Clock size={20} className="text-pink-500"/> 历史记录
             </h3>
-            <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="max-h-72 lg:max-h-80 overflow-y-auto pr-2 custom-scrollbar">
               {history.length === 0 ? (
                 <p className="text-gray-400 text-center py-6 text-sm">暂无抽取记录</p>
               ) : (
@@ -218,8 +211,9 @@ export default function PlayerPage() {
           </motion.div>
         </div>
 
-        {/* ================= 右側：提交建議區 ================= */}
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="lg:col-span-1 bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-5 shadow-sm flex flex-col h-[380px]">
+        {/* ================= 右側：提交建議區 (佔 3/12 欄) - 手機排第 2 ================= */}
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} 
+          className="order-2 lg:order-3 lg:col-span-3 w-full bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-5 shadow-sm flex flex-col h-[380px]">
           <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-200 pb-3">
             <Send size={20} className="text-purple-500"/> 提议新惩罚
           </h3>
