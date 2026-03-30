@@ -318,18 +318,16 @@ export default function PlayerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f3f4f6] flex flex-col items-center p-4 md:p-6 relative overflow-x-clip text-gray-800">
+    <div 
+      className="min-h-screen flex flex-col items-center p-4 md:p-6 relative overflow-x-clip text-gray-800 bg-cover bg-center bg-fixed"
+      style={{ backgroundImage: 'url("/bg.png")' }}
+    >
       <style>{`
         ::-webkit-scrollbar, body::-webkit-scrollbar, .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track, body::-webkit-scrollbar-track, .custom-scrollbar::-webkit-scrollbar-track { background: transparent !important; border-radius: 10px; }
         ::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb, .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(192, 132, 252, 0.4); border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover, .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(168, 85, 247, 0.8); }
       `}</style>
-
-      {/* GPU 硬體加速背景 */}
-      <div className="absolute top-0 -left-20 w-[30rem] h-[30rem] bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob" style={{ transform: 'translateZ(0)', willChange: 'transform' }}></div>
-      <div className="absolute top-40 -right-20 w-[30rem] h-[30rem] bg-pink-300 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-2000" style={{ transform: 'translateZ(0)', willChange: 'transform' }}></div>
-      <div className="absolute -bottom-32 left-1/3 w-[30rem] h-[30rem] bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-4000" style={{ transform: 'translateZ(0)', willChange: 'transform' }}></div>
 
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="z-10 flex flex-col items-center my-6">
         <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500 tracking-wide drop-shadow-sm flex items-center">
@@ -341,6 +339,9 @@ export default function PlayerPage() {
         
         {/* 左側：當前懲罰池 */}
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} className="order-3 lg:order-1 lg:col-span-3 w-full bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-5 shadow-sm flex flex-col h-[600px] lg:h-[750px]">
+          <div className="mb-2 text-sm font-bold text-purple-600 bg-purple-100/80 px-3 py-1.5 rounded-xl w-fit shadow-sm">
+            KOOK ID: 80810454
+          </div>
           <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-200 pb-3">
             <List size={20} className="text-purple-500"/> 当前惩罚池 ({punishments.length})
           </h3>

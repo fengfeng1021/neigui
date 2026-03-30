@@ -179,9 +179,10 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f3f4f6] text-gray-800 flex flex-col items-center p-4 md:p-12 relative overflow-x-clip">
-      <div className="absolute top-0 right-0 w-96 h-96 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob"></div>
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-2000"></div>
+    <div 
+      className="min-h-screen text-gray-800 flex flex-col items-center p-4 md:p-12 relative overflow-x-clip bg-cover bg-center bg-fixed"
+      style={{ backgroundImage: 'url("/bg.png")' }}
+    >
 
       <div className="w-full max-w-4xl flex justify-between items-center mb-10 z-10">
         <h1 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500 tracking-wide">
