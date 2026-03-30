@@ -165,12 +165,19 @@ export default function PlayerPage() {
     const finalResult = punishments[Math.floor(Math.random() * punishments.length)];
     
     // 2. 防作弊核心：在動畫開始前，"立即" 寫入後端資料庫
-    const newEntry = { text: finalResult, time: new Date().toLocaleString(), timestamp: Date.now() };
+    const now = Date.now();
+    const newEntry = { text: finalResult, time: new Date().toLocaleString(), timestamp: now };
     const SEVENTY_TWO_HOURS = 72 * 60 * 60 * 1000;
     
-    // 過濾出 72 小時內的歷史，加上最新這筆，並嚴格保留最多 50 筆 (slice(0, 50) 會丟棄第 51 筆最舊紀錄)
+    // 計算這一次要寫入 DB 的歷史紀錄
     const currentHistory = Array.isArray(history) ? history : [];
-    const validHistory = currentHistory.filter(item => item.timestamp && (Date.now() - item.timestamp) < SEVENTY_TWO_HOURS);
+    const validHistory = currentHistory.filter(item => {
+      // 兼容舊數據：如果沒有 timestamp 就保留；有的話才判斷是否超過 72 小時
+      if (!item.timestamp) return true; 
+      return (now - item.timestamp) < SEVENTY_TWO_HOURS;
+    });
+    
+    // 嚴格保留最多 50 筆
     const updatedHistoryForDB = [newEntry, ...validHistory].slice(0, 50);
 
     // 背景發送 API 鎖定抽獎結果，玩家重整也無效
@@ -350,7 +357,7 @@ export default function PlayerPage() {
       `}</style>
 
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="z-10 flex flex-col items-center my-6 w-full relative">
-        <div className="relative w-full py-6 flex items-center justify-center drop-shadow-[0_0_8px_#3b82f6] drop-shadow-[0_0_16px_#9333ea] drop-shadow-[0_0_35px_rgba(168,85,247,0.9)]">
+        <div className="relative w-full py-6 flex items-center justify-center drop-shadow-[0_0_8px_#3b82f6,0_0_16px_#9333ea,0_0_35px_rgba(168,85,247,0.9)]">
           
           {/* 背景能量场与动态速度线 */}
           <div className="absolute inset-0 flex items-center justify-center -z-10 pointer-events-none">
@@ -460,7 +467,7 @@ export default function PlayerPage() {
                   </div>
 
                   {/* 主文字 (調整發光與外框為深紫-桃粉漸層) */}
-                  <div className="relative w-full py-4 flex items-center justify-center drop-shadow-[0_0_8px_#818cf8] drop-shadow-[0_0_20px_#a855f7] drop-shadow-[0_0_40px_rgba(244,114,182,0.8)]">
+                  <div className="relative w-full py-4 flex items-center justify-center drop-shadow-[0_0_8px_#818cf8,0_0_20px_#a855f7,0_0_40px_rgba(244,114,182,0.8)]">
                     
                     {/* 底層：粗外框層 (6px 透明描邊 + 深紫-桃粉漸層背景，製造出深邃外框感) */}
                     <span className={`absolute w-full font-black tracking-widest text-transparent [-webkit-text-stroke:6px_transparent] bg-clip-text bg-gradient-to-r from-purple-800 to-pink-400 text-center break-words whitespace-normal ${getDynamicTextSize(result)}`}>
