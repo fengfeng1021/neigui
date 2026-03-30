@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { UPSTASH_URL, READ_ONLY_TOKEN, MY_CUSTOM_PASSWORD, HIDDEN_WRITE_TOKEN } from '../config';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, Plus, LogOut, CheckCircle2, AlertCircle, Check, X } from 'lucide-react';
+import { Trash2, Plus, LogOut, CheckCircle2, AlertCircle, Check, X, Edit2, Save, ThumbsUp, ThumbsDown } from 'lucide-react';
 
 const safeJSONParse = (data: any, fallback: any) => {
   if (!data) return fallback;
@@ -17,12 +17,15 @@ const safeJSONParse = (data: any, fallback: any) => {
 
 export default function AdminPage() {
   const [punishments, setPunishments] = useState<string[]>([]);
-  const [pendingList, setPendingList] = useState<string[]>([]);
+  const [pendingList, setPendingList] = useState<any[]>([]); // 改為 any[] 以兼容物件
   const [newPunishment, setNewPunishment] = useState("");
   const [inputPassword, setInputPassword] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [status, setStatus] = useState({ message: "", type: "" });
   const navigate = useNavigate();
+
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
 
   useEffect(() => {
     const savedLogin = localStorage.getItem('valo_admin_logged_in');
@@ -40,7 +43,15 @@ export default function AdminPage() {
 
       const resPend = await fetch(`${UPSTASH_URL}/get/pending_punishments`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
       const dataPend = await resPend.json();
-      setPendingList(safeJSONParse(dataPend.result, []));
+      
+      // 處理資料：如果是舊的純文字，轉為物件格式方便統一顯示
+      const rawPending = safeJSONParse(dataPend.result, []);
+      const formattedPending = rawPending.map((item: any) => 
+        typeof item === 'string' 
+          ? { id: Math.random().toString(), text: item, upvotes: 0, downvotes: 0 } 
+          : item
+      );
+      setPendingList(formattedPending);
     } catch (err) {
       showStatus("数据加载失败", "error");
     }
@@ -79,7 +90,6 @@ export default function AdminPage() {
     });
   };
 
-  // 手動新增懲罰
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPunishment.trim()) return;
@@ -90,17 +100,31 @@ export default function AdminPage() {
     showStatus("添加成功", "success");
   };
 
-  // 刪除現有懲罰
+  const handleSaveEdit = async (index: number) => {
+    if (!editText.trim() || editText === punishments[index]) {
+      setEditingIndex(null);
+      return;
+    }
+    const updated = [...punishments];
+    updated[index] = editText.trim();
+    await updateCloud('punishment_list', updated);
+    setPunishments(updated);
+    setEditingIndex(null);
+    showStatus("修改成功", "success");
+  };
+
   const handleDelete = async (indexToDelete: number) => {
     const updated = punishments.filter((_, i) => i !== indexToDelete);
     await updateCloud('punishment_list', updated);
     setPunishments(updated);
   };
 
-  // 審核通過：加入正式池，並從待審核移除
   const handleApprove = async (index: number) => {
     const item = pendingList[index];
-    const newPunishments = [...punishments, item];
+    // 從物件中取出 text，如果是純文字就直接用
+    const approvedText = typeof item === 'string' ? item : item.text; 
+
+    const newPunishments = [...punishments, approvedText];
     const newPending = pendingList.filter((_, i) => i !== index);
     
     await updateCloud('punishment_list', newPunishments);
@@ -108,18 +132,25 @@ export default function AdminPage() {
     
     setPunishments(newPunishments);
     setPendingList(newPending);
-    showStatus(`已通过: ${item}`, "success");
+    showStatus(`已通过: ${approvedText}`, "success");
   };
 
-  // 審核拒絕：直接從待審核移除
   const handleReject = async (index: number) => {
     const newPending = pendingList.filter((_, i) => i !== index);
     await updateCloud('pending_punishments', newPending);
     setPendingList(newPending);
   };
 
+  const handleClearVotes = async () => {
+    if (!window.confirm("确定要清空所有待审核提议的投票数吗？")) return;
+    const clearedList = pendingList.map(p => typeof p === 'object' ? { ...p, upvotes: 0, downvotes: 0 } : p);
+    await updateCloud('pending_punishments', clearedList);
+    setPendingList(clearedList);
+    showStatus("已清空所有投票", "success");
+  };
+
   return (
-    <div className="min-h-screen bg-[#f3f4f6] text-gray-800 flex flex-col items-center p-6 md:p-12 relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#f3f4f6] text-gray-800 flex flex-col items-center p-4 md:p-12 relative overflow-x-clip">
       <div className="absolute top-0 right-0 w-96 h-96 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob"></div>
       <div className="absolute bottom-0 left-0 w-96 h-96 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-2000"></div>
 
@@ -156,19 +187,37 @@ export default function AdminPage() {
         ) : (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6">
             
-            {/* 區塊 1：待審核清單 */}
             <div className="bg-white/60 backdrop-blur-xl border border-purple-100 rounded-3xl p-6 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 w-1 h-full bg-purple-400"></div>
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">玩家提交待审核 ({pendingList.length})</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">玩家提交待审核 ({pendingList.length})</h3>
+                <button onClick={handleClearVotes} className="text-xs bg-red-100 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-200 transition-colors font-bold flex items-center gap-1">
+                  <Trash2 size={14}/> 清空投票
+                </button>
+              </div>
               <div className="flex flex-col gap-3">
                 <AnimatePresence>
                   {pendingList.length === 0 && <motion.div className="text-gray-400 py-4">目前没有待审核的提议。</motion.div>}
                   {pendingList.map((p, index) => (
                     <motion.div key={index} layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.9 }}
-                      className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-purple-50"
+                      className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-purple-50"
                     >
-                      <span className="font-bold text-gray-700">{p}</span>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col gap-2 w-full sm:flex-1">
+                        <span className="font-bold text-gray-700 break-words">{typeof p === 'string' ? p : p.text}</span>
+                        {/* 顯示玩家投票狀態 */}
+                        {typeof p === 'object' && (
+                           <div className="flex gap-4 mt-1">
+                             <span className="flex items-center gap-1.5 text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg">
+                               <ThumbsUp size={14}/> {p.upvotes || 0}
+                             </span>
+                             <span className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded-lg">
+                               <ThumbsDown size={14}/> {p.downvotes || 0}
+                             </span>
+                           </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex gap-2 self-end sm:self-auto shrink-0 mt-2 sm:mt-0">
                         <button onClick={() => handleApprove(index)} className="bg-green-100 text-green-600 p-2 rounded-xl hover:bg-green-200 transition-colors" title="通过并加入惩罚池"><Check size={20}/></button>
                         <button onClick={() => handleReject(index)} className="bg-red-100 text-red-600 p-2 rounded-xl hover:bg-red-200 transition-colors" title="残忍拒绝"><X size={20}/></button>
                       </div>
@@ -178,16 +227,14 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* 區塊 2：手動新增 */}
-            <div className="bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row gap-4 justify-between md:items-center">
-              <h3 className="text-lg font-bold text-gray-800">直接添加惩罚</h3>
-              <form onSubmit={handleAdd} className="flex gap-3 flex-1 md:ml-8">
-                <input type="text" value={newPunishment} onChange={(e) => setNewPunishment(e.target.value)} className="flex-1 bg-white/50 border border-gray-200 focus:border-purple-400 rounded-xl p-3 text-gray-800 outline-none" placeholder="输入新惩罚..." />
-                <button type="submit" disabled={!newPunishment.trim()} className="bg-gray-800 text-white px-6 rounded-xl font-bold hover:bg-gray-700 disabled:opacity-50"><Plus size={20} /></button>
+            <div className="bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row gap-4 justify-between md:items-start">
+              <h3 className="text-lg font-bold text-gray-800 mt-3">直接添加惩罚</h3>
+              <form onSubmit={handleAdd} className="flex gap-3 flex-1 md:ml-8 items-stretch">
+                <textarea value={newPunishment} onChange={(e) => setNewPunishment(e.target.value)} rows={2} className="flex-1 bg-white/50 border border-gray-200 focus:border-purple-400 rounded-xl p-3 text-gray-800 outline-none resize-none custom-scrollbar" placeholder="输入新惩罚 (支持多行)..." />
+                <button type="submit" disabled={!newPunishment.trim()} className="bg-gray-800 text-white px-6 rounded-xl font-bold hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center"><Plus size={20} /></button>
               </form>
             </div>
 
-            {/* 區塊 3：現有懲罰列表 */}
             <div className="bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-6 shadow-sm">
               <div className="flex justify-between items-center mb-4">
                 <span className="text-sm text-gray-500 font-medium">当前正式惩罚池 ({punishments.length})</span>
@@ -198,10 +245,30 @@ export default function AdminPage() {
                   {punishments.length === 0 && <motion.div className="text-gray-400 text-center py-8">惩罚池为空。</motion.div>}
                   {punishments.map((p, index) => (
                     <motion.div key={index} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.9, backgroundColor: '#fecdd3' }}
-                      className="group flex justify-between items-center bg-white/80 p-4 rounded-2xl border border-transparent hover:border-pink-200 transition-all"
+                      className="group flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white/80 p-4 rounded-2xl border border-transparent hover:border-pink-200 transition-all"
                     >
-                      <span className="font-bold text-gray-700">{p}</span>
-                      <button onClick={() => handleDelete(index)} className="text-gray-300 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50"><Trash2 size={18} /></button>
+                      {editingIndex === index ? (
+                        <div className="flex flex-1 w-full gap-2 items-center">
+                          <input 
+                            type="text" 
+                            value={editText} 
+                            onChange={(e) => setEditText(e.target.value)} 
+                            className="flex-1 bg-white border border-purple-300 focus:border-purple-500 rounded-xl p-2 text-gray-800 outline-none text-sm font-bold w-full" 
+                            autoFocus
+                            onKeyDown={(e) => { if(e.key === 'Enter') handleSaveEdit(index); if(e.key === 'Escape') setEditingIndex(null); }}
+                          />
+                          <button onClick={() => handleSaveEdit(index)} className="text-green-500 hover:bg-green-50 p-2 rounded-lg transition-colors shrink-0"><Save size={18} /></button>
+                          <button onClick={() => setEditingIndex(null)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-lg transition-colors shrink-0"><X size={18} /></button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="font-bold text-gray-700 break-words w-full sm:flex-1 pr-2 leading-relaxed">{p}</span>
+                          <div className="flex gap-1 self-end sm:self-auto shrink-0 opacity-100 sm:opacity-50 sm:group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => { setEditingIndex(index); setEditText(p); }} className="text-gray-400 hover:text-blue-500 transition-colors p-2 rounded-lg hover:bg-blue-50" title="编辑"><Edit2 size={18} /></button>
+                            <button onClick={() => handleDelete(index)} className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50" title="删除"><Trash2 size={18} /></button>
+                          </div>
+                        </>
+                      )}
                     </motion.div>
                   ))}
                 </AnimatePresence>

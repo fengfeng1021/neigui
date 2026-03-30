@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UPSTASH_URL, READ_ONLY_TOKEN, HIDDEN_WRITE_TOKEN } from '../config';
-import { Send, Clock, List } from 'lucide-react';
+import { Send, Clock, List, ThumbsUp, ThumbsDown, Vote } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const safeJSONParse = (data: any, fallback: any) => {
@@ -14,6 +14,8 @@ const safeJSONParse = (data: any, fallback: any) => {
     return fallback;
   }
 };
+
+type PendingItem = { id: string; text: string; upvotes: number; downvotes: number };
 
 // ================= 音頻引擎 =================
 let globalAudioCtx: AudioContext | null = null;
@@ -52,16 +54,25 @@ const playWinSound = () => {
 export default function PlayerPage() {
   const [punishments, setPunishments] = useState<string[]>([]);
   const [history, setHistory] = useState<{text: string, time: string, timestamp?: number}[]>([]);
+  const [pendingList, setPendingList] = useState<PendingItem[]>([]);
+  const [votedIds, setVotedIds] = useState<string[]>([]);
   const [spinStatus, setSpinStatus] = useState<'idle' | 'spinning' | 'landed'>('idle');
   const [result, setResult] = useState<string | null>(null);
   
-  // 核心抽獎狀態
   const [tape, setTape] = useState<string[]>([]);
-  const [winIndex, setWinIndex] = useState(-1); // 記錄真正中獎的卡片索引
-  const [finalY, setFinalY] = useState(0);      // 記錄捲軸最終要停下的精確 Y 座標
+  const [winIndex, setWinIndex] = useState(-1); 
+  const [finalY, setFinalY] = useState(0);     
 
   const [suggestion, setSuggestion] = useState("");
   const [submitStatus, setSubmitStatus] = useState("");
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
 
   const fetchData = async () => {
     try {
@@ -72,11 +83,22 @@ export default function PlayerPage() {
       const resHist = await fetch(`${UPSTASH_URL}/get/draw_history`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
       const dataHist = await resHist.json();
       setHistory(safeJSONParse(dataHist.result, []));
+
+      // 獲取並格式化待審核清單 (兼容舊的純字串資料)
+      const resPend = await fetch(`${UPSTASH_URL}/get/pending_punishments`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
+      const dataPend = await resPend.json();
+      const rawPend = safeJSONParse(dataPend.result, []);
+      const formattedPend = rawPend.map((p: any) => 
+        typeof p === 'string' ? { id: Math.random().toString(36).substr(2, 9), text: p, upvotes: 0, downvotes: 0 } : p
+      );
+      setPendingList(formattedPend);
     } catch (err) {}
   };
 
   useEffect(() => {
     fetchData();
+    const savedVotes = localStorage.getItem('valo_voted_ids');
+    if (savedVotes) setVotedIds(JSON.parse(savedVotes));
 
     const createHeart = (e: MouseEvent, isClick = false) => {
       if (!isClick && Math.random() > 0.08) return; 
@@ -117,71 +139,50 @@ export default function PlayerPage() {
     return "text-5xl md:text-7xl tracking-wide";
   };
 
-  // ================= 精準無跳動的數學引擎 =================
   const handleDraw = () => {
     if (punishments.length === 0 || spinStatus !== 'idle') return;
-    
     initAudio();
     confetti.reset();
     setSpinStatus('spinning');
     setResult(null); 
     
-    // 1. 決定最終結果
     const finalResult = punishments[Math.floor(Math.random() * punishments.length)];
-
-    // 2. 生成實體捲軸 (長度加長到 70，避免滾到底部留白)
     const newTape = Array.from({ length: 70 }, () => punishments[Math.floor(Math.random() * punishments.length)]);
-    
-    // 3. 隨機決定中獎卡片的索引 (放在 45 ~ 55 之間，確保下方還有充足的卡片)
     const targetIndex = 45 + Math.floor(Math.random() * 10);
     newTape[targetIndex] = finalResult; 
     setTape(newTape);
     setWinIndex(targetIndex);
 
-    // 4. 計算終點 Y 座標 (精準對齊數學)
-    // 容器高 380px，中心點在 190px。卡片高 80px，卡片中心點為 40px。
-    // 目標卡片中心點要對齊容器中心點：190 - (targetIndex * 80 + 40) = 150 - targetIndex * 80
     const baseFinalY = 150 - (targetIndex * 80);
-    
-    // 加入 +/- 30px 的隨機偏移，讓激光隨機壓在卡片的偏上或偏下位置，而非死板的絕對置中
     const randomOffset = (Math.random() * 60) - 30; 
     setFinalY(baseFinalY + randomOffset);
 
     const spinDuration = 3500; 
     const start = Date.now();
 
-    // 物理引擎與打擊感
     const rollAudio = () => {
       const elapsed = Date.now() - start;
       if (elapsed > spinDuration - 150) return; 
       playBeep(180 + Math.random() * 80, 'square', 0.015, 0.1);
       if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10); 
-      
       const progress = elapsed / spinDuration;
       const nextDelay = 25 + Math.pow(progress, 3) * 400; 
       setTimeout(rollAudio, nextDelay);
     };
     rollAudio(); 
 
-    // 動畫結算
     setTimeout(() => {
-      setSpinStatus('landed'); // 激光定格在卡片上
-
+      setSpinStatus('landed');
       setTimeout(() => {
-        setSpinStatus('idle'); // 關閉捲軸，彈出超大字體
+        setSpinStatus('idle');
         setResult(finalResult);
         saveHistory(finalResult);
         playWinSound();
-        
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-            navigator.vibrate([100, 50, 100]); 
-        }
-
+        if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([100, 50, 100]); 
         const defaults: confetti.Options = { spread: 360, ticks: 100, gravity: 0.5, decay: 0.94, startVelocity: 30, shapes: ['star'], colors: ['#FFE400', '#FFBD00', '#E89400', '#FFCA6C', '#FDFFB8', '#9333ea', '#ec4899'] };
         confetti({ ...defaults, particleCount: 80, origin: { x: 0.5, y: 0.5 } });
         setTimeout(() => confetti({ ...defaults, particleCount: 50, origin: { x: 0.2, y: 0.6 } }), 200);
         setTimeout(() => confetti({ ...defaults, particleCount: 50, origin: { x: 0.8, y: 0.6 } }), 400);
-
       }, 850);
     }, spinDuration); 
   };
@@ -201,11 +202,27 @@ export default function PlayerPage() {
     setSubmitStatus("提交中...");
     try {
       const res = await fetch(`${UPSTASH_URL}/get/pending_punishments`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
-      const currentPending = safeJSONParse((await res.json()).result, []);
-      const postRes = await fetch(`${UPSTASH_URL}/set/pending_punishments`, { method: 'POST', headers: { Authorization: `Bearer ${HIDDEN_WRITE_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify([...currentPending, suggestion.trim()]) });
+      const currentRaw = safeJSONParse((await res.json()).result, []);
+      const currentPending = currentRaw.map((p: any) => typeof p === 'string' ? { id: Math.random().toString(36).substr(2, 9), text: p, upvotes: 0, downvotes: 0 } : p);
+      
+      const newSuggestion: PendingItem = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+        text: suggestion.trim(),
+        upvotes: 0,
+        downvotes: 0
+      };
+
+      const postRes = await fetch(`${UPSTASH_URL}/set/pending_punishments`, { 
+        method: 'POST', 
+        headers: { Authorization: `Bearer ${HIDDEN_WRITE_TOKEN}`, 'Content-Type': 'application/json' }, 
+        body: JSON.stringify([...currentPending, newSuggestion]) 
+      });
+
       if ((await postRes.json()).result === "OK") {
         setSubmitStatus("提交成功！等待审核。");
         setSuggestion("");
+        setPendingList([...pendingList, newSuggestion]); // Optimistic update
+        setCooldown(5); // 触发 5 秒冷却
         setTimeout(() => setSubmitStatus(""), 3000);
       }
     } catch (err) {
@@ -213,8 +230,33 @@ export default function PlayerPage() {
     }
   };
 
+  const handleVote = async (id: string, type: 'up' | 'down') => {
+    if (votedIds.includes(id)) return;
+    
+    // 樂觀更新 UI (讓玩家立刻看到數字跳動)
+    setPendingList(prev => prev.map(p => 
+      p.id === id ? { ...p, upvotes: p.upvotes + (type === 'up' ? 1 : 0), downvotes: p.downvotes + (type === 'down' ? 1 : 0) } : p
+    ));
+    const newVoted = [...votedIds, id];
+    setVotedIds(newVoted);
+    localStorage.setItem('valo_voted_ids', JSON.stringify(newVoted));
+
+    // 背景同步到資料庫
+    try {
+      const res = await fetch(`${UPSTASH_URL}/get/pending_punishments`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
+      let serverList = safeJSONParse((await res.json()).result, []).map((p: any) => typeof p === 'string' ? { id: Math.random().toString(36).substr(2, 9), text: p, upvotes: 0, downvotes: 0 } : p);
+      const updatedList = serverList.map((p: any) => p.id === id ? { ...p, upvotes: p.upvotes + (type === 'up' ? 1 : 0), downvotes: p.downvotes + (type === 'down' ? 1 : 0) } : p);
+      
+      await fetch(`${UPSTASH_URL}/set/pending_punishments`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${HIDDEN_WRITE_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedList)
+      });
+    } catch (err) {}
+  };
+
   return (
-    <div className="min-h-screen bg-[#f3f4f6] flex flex-col items-center p-4 md:p-6 relative overflow-x-hidden text-gray-800">
+    <div className="min-h-screen bg-[#f3f4f6] flex flex-col items-center p-4 md:p-6 relative overflow-x-clip text-gray-800">
       <style>{`
         ::-webkit-scrollbar, body::-webkit-scrollbar, .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track, body::-webkit-scrollbar-track, .custom-scrollbar::-webkit-scrollbar-track { background: transparent !important; border-radius: 10px; }
@@ -228,19 +270,19 @@ export default function PlayerPage() {
       <div className="absolute -bottom-32 left-1/3 w-[30rem] h-[30rem] bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-4000" style={{ transform: 'translateZ(0)', willChange: 'transform' }}></div>
 
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="z-10 flex flex-col items-center my-6">
-    <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500 tracking-wide drop-shadow-sm flex items-center">
-      惩罚扭蛋机
-    </h1>
-  </motion.div>
+        <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500 tracking-wide drop-shadow-sm flex items-center">
+          惩罚扭蛋机
+        </h1>
+      </motion.div>
 
-      <div className="z-10 w-full max-w-[85rem] mx-auto flex flex-col lg:grid lg:grid-cols-12 gap-6 items-start justify-center">
+      <div className="z-10 w-full max-w-[105rem] mx-auto px-4 lg:px-8 flex flex-col lg:grid lg:grid-cols-10 gap-6 lg:gap-8 items-start justify-center">
         
         {/* 左側：當前懲罰池 */}
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} className="order-3 lg:order-1 lg:col-span-3 w-full bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-5 shadow-sm flex flex-col h-[600px] lg:h-[750px]">
           <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-200 pb-3">
             <List size={20} className="text-purple-500"/> 当前惩罚池 ({punishments.length})
           </h3>
-          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar overscroll-contain touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
             {punishments.length === 0 ? (
               <p className="text-gray-400 text-center py-10 text-sm">惩罚池为空，请管理员添加</p>
             ) : (
@@ -257,10 +299,8 @@ export default function PlayerPage() {
         </motion.div>
 
         {/* 中間：抽獎區 */}
-        <div className="order-1 lg:order-2 lg:col-span-6 w-full flex flex-col gap-6">
+        <div className="order-1 lg:order-2 lg:col-span-4 w-full flex flex-col gap-6">
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full h-[380px] bg-white/50 backdrop-blur-xl border border-white/80 rounded-3xl shadow-sm flex flex-col items-center justify-center relative overflow-hidden p-6 text-center">
-            
-            {/* 激光陣列 */}
             <AnimatePresence>
               {(spinStatus === 'spinning' || spinStatus === 'landed') && (
                 <div className="absolute top-1/2 left-0 right-0 h-[80px] -translate-y-1/2 z-20 pointer-events-none box-border flex items-center justify-center">
@@ -271,27 +311,17 @@ export default function PlayerPage() {
               )}
             </AnimatePresence>
 
-            {/* 卡片式捲軸動畫區 */}
             <div className="absolute inset-0 w-full overflow-hidden pointer-events-none" style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)' }}>
               <AnimatePresence>
                 {(spinStatus === 'spinning' || spinStatus === 'landed') && (
                   <motion.div
-                    // 取消 scaleY，改為純粹精準的 translateY 以確保絕對不跳動
-                    initial={{ y: 0 }}
-                    animate={{ y: finalY }}
-                    transition={{ 
-                        duration: 3.5, 
-                        ease: [0.15, 0.9, 0.25, 1] // 極致平滑的貝茲曲線煞車
-                    }} 
-                    className="absolute top-0 left-0 w-full flex flex-col" // 恢復正常的由上往下排列
-                    style={{ willChange: "transform" }}
+                    initial={{ y: 0 }} animate={{ y: finalY }} transition={{ duration: 3.5, ease: [0.15, 0.9, 0.25, 1] }} 
+                    className="absolute top-0 left-0 w-full flex flex-col" style={{ willChange: "transform" }}
                   >
                     {tape.map((item, i) => (
                       <div key={i} className="h-[80px] w-full flex items-center justify-center px-8 py-1.5">
                         <div className={`w-full h-full bg-white rounded-xl shadow-sm border-2 flex items-center justify-center px-4 transition-colors ${spinStatus === 'landed' && i === winIndex ? 'border-purple-500 bg-purple-50' : 'border-gray-100'}`}>
-                          <span className={`font-bold text-xl md:text-2xl truncate ${spinStatus === 'landed' && i === winIndex ? 'text-purple-700' : 'text-gray-500'}`}>
-                            {item}
-                          </span>
+                          <span className={`font-bold text-xl md:text-2xl truncate ${spinStatus === 'landed' && i === winIndex ? 'text-purple-700' : 'text-gray-500'}`}>{item}</span>
                         </div>
                       </div>
                     ))}
@@ -300,12 +330,9 @@ export default function PlayerPage() {
               </AnimatePresence>
             </div>
 
-            {/* 結果彈出 */}
             <AnimatePresence>
               {spinStatus === 'idle' && result && (
-                <motion.div key="result" initial={{ scale: 0.3, opacity: 0, y: 30 }} animate={{ scale: 1, opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 200, damping: 15 }} className={`absolute font-black text-transparent bg-clip-text bg-gradient-to-br from-purple-700 via-pink-600 to-orange-500 drop-shadow-[0_4px_4px_rgba(0,0,0,0.15)] w-full px-4 text-center break-words whitespace-normal py-2 ${getDynamicTextSize(result)}`}>
-                  {result}
-                </motion.div>
+                <motion.div key="result" initial={{ scale: 0.3, opacity: 0, y: 30 }} animate={{ scale: 1, opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 200, damping: 15 }} className={`absolute font-black text-transparent bg-clip-text bg-gradient-to-br from-purple-700 via-pink-600 to-orange-500 drop-shadow-[0_4px_4px_rgba(0,0,0,0.15)] w-full px-4 text-center break-words whitespace-normal py-2 ${getDynamicTextSize(result)}`}>{result}</motion.div>
               )}
               {spinStatus === 'idle' && !result && (
                 <motion.div key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute text-2xl font-bold text-gray-400 text-center">
@@ -321,12 +348,11 @@ export default function PlayerPage() {
             </div>
           </motion.div>
 
-          {/* 歷史記錄 */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-5 shadow-sm">
             <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2 border-b border-gray-200 pb-2">
               <Clock size={20} className="text-pink-500"/> 历史记录 (仅保留 72 小时)
             </h3>
-            <div className="max-h-72 lg:max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="max-h-72 lg:max-h-80 overflow-y-auto pr-2 custom-scrollbar overscroll-contain touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
               {history.length === 0 ? (
                 <p className="text-gray-400 text-center py-6 text-sm">暂无抽取记录</p>
               ) : (
@@ -343,20 +369,61 @@ export default function PlayerPage() {
           </motion.div>
         </div>
 
-        {/* 右側：提交建議區 */}
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="order-2 lg:order-3 lg:col-span-3 w-full bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-5 shadow-sm flex flex-col h-[380px]">
-          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-200 pb-3">
-            <Send size={20} className="text-purple-500"/> 提议新惩罚
-          </h3>
-          <p className="text-xs text-gray-500 mb-4">想到了够狠的惩罚？提交给管理员审核吧！</p>
-          <form onSubmit={handleSubmitSuggestion} className="flex flex-col gap-4 flex-1">
-            <textarea value={suggestion} onChange={(e) => setSuggestion(e.target.value)} className="flex-1 w-full bg-white/70 border border-purple-100 focus:border-purple-400 rounded-2xl p-4 text-gray-800 outline-none transition-all shadow-inner resize-none custom-scrollbar text-sm" placeholder="在这里输入你的邪恶计划..." />
-            <button type="submit" disabled={!suggestion.trim()} className="w-full bg-purple-500 text-white py-4 rounded-2xl font-bold hover:bg-purple-600 transition-colors disabled:opacity-50">提交审核</button>
-          </form>
-          <AnimatePresence>
-            {submitStatus && <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-sm mt-3 text-center text-purple-600 font-bold">{submitStatus}</motion.p>}
-          </AnimatePresence>
-        </motion.div>
+        {/* 右側：分為提交區與投票區 */}
+        <div className="order-2 lg:order-3 lg:col-span-3 w-full flex flex-col gap-6">
+          
+          {/* 區塊 A：提交新懲罰 */}
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="w-full bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-5 shadow-sm flex flex-col">
+            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-200 pb-3">
+              <Send size={20} className="text-purple-500"/> 提议新惩罚
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">想到了够狠的惩罚？提交给管理员审核吧！</p>
+            <form onSubmit={handleSubmitSuggestion} className="flex flex-col gap-4">
+              <textarea value={suggestion} onChange={(e) => setSuggestion(e.target.value)} rows={3} className="w-full bg-white/70 border border-purple-100 focus:border-purple-400 rounded-2xl p-4 text-gray-800 outline-none transition-all shadow-inner resize-none custom-scrollbar text-sm" placeholder="在这里输入你的邪恶计划..." />
+              <button type="submit" disabled={!suggestion.trim() || cooldown > 0} className="w-full bg-purple-500 text-white py-3 rounded-2xl font-bold hover:bg-purple-600 transition-colors disabled:opacity-50">
+                {cooldown > 0 ? `提交冷却中 (${cooldown}s)` : '提交审核'}
+              </button>
+            </form>
+            <AnimatePresence>
+              {submitStatus && <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-sm mt-3 text-center text-purple-600 font-bold">{submitStatus}</motion.p>}
+            </AnimatePresence>
+          </motion.div>
+
+          {/* 區塊 B：玩家投票區 */}
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }} className="w-full bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-5 shadow-sm flex flex-col h-[400px]">
+             <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center justify-between border-b border-gray-200 pb-3">
+              <div className="flex items-center gap-2"><Vote size={20} className="text-pink-500"/> 待审核惩罚投票 </div>
+              <span className="text-xs bg-pink-100 text-pink-600 px-2 py-1 rounded-full">{pendingList.length} 个待审</span>
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">管理觉得一般或看不懂所以放着没管 大家觉得好玩就通过</p>
+            
+            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar overscroll-contain touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {pendingList.length === 0 ? (
+                <p className="text-gray-400 text-center py-10 text-sm">目前没有待审核的提议</p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {pendingList.map((p) => {
+                    const hasVoted = votedIds.includes(p.id);
+                    return (
+                      <div key={p.id} className="bg-white/80 p-4 rounded-2xl border border-pink-50 shadow-sm flex flex-col gap-3 hover:border-pink-200 transition-colors">
+                        <span className="font-bold text-gray-700 text-sm break-words leading-relaxed">{p.text}</span>
+                        <div className="flex gap-2 justify-end mt-1">
+                          <button onClick={() => handleVote(p.id, 'up')} disabled={hasVoted} className={`flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 rounded-xl font-bold transition-all ${hasVoted ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-green-50 text-green-600 hover:bg-green-100 hover:scale-105 active:scale-95'}`}>
+                            <ThumbsUp size={14}/> {p.upvotes || 0}
+                          </button>
+                          <button onClick={() => handleVote(p.id, 'down')} disabled={hasVoted} className={`flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 rounded-xl font-bold transition-all ${hasVoted ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-red-50 text-red-600 hover:bg-red-100 hover:scale-105 active:scale-95'}`}>
+                            <ThumbsDown size={14}/> {p.downvotes || 0}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </motion.div>
+
+        </div>
       </div>
 
       <a href="#/admin" className="fixed bottom-4 right-4 text-gray-400 hover:text-purple-500 transition-colors opacity-30 hover:opacity-100 z-50">⚙️</a>

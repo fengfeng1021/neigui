@@ -2,25 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 基礎設定 */
-body {
-  margin: 0;
-  overflow-x: hidden;
-}
-
-/* 滾動條美化 (Valorant Cyan) */
-::-webkit-scrollbar {
-  width: 8px;
-}
-::-webkit-scrollbar-track {
-  background: #101823;
-}
-::-webkit-scrollbar-thumb {
-  background: #76FFED;
-  border-radius: 4px;
-}
-
-/* 設置標題字體 */
-h1, h2, h3, h4, h5 {
-  font-family: 'Oswald', sans-serif;
+/* 為了確保背景完美覆蓋，你可以補上這行 */
+body, html {
+  background-color: #f3f4f6;
 }
