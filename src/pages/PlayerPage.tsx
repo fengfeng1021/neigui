@@ -228,11 +228,10 @@ export default function PlayerPage() {
       <div className="absolute -bottom-32 left-1/3 w-[30rem] h-[30rem] bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-4000" style={{ transform: 'translateZ(0)', willChange: 'transform' }}></div>
 
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="z-10 flex flex-col items-center my-6">
-        <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500 tracking-wide drop-shadow-sm flex items-center gap-3">
-          <Sparkles className="text-pink-500" size={36} /> 惩罚扭蛋机
-        </h1>
-        <p className="text-gray-500 font-medium mt-2 tracking-widest text-sm">SURVIVAL_ROULETTE // PROTOCOL</p>
-      </motion.div>
+    <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500 tracking-wide drop-shadow-sm flex items-center">
+      惩罚扭蛋机
+    </h1>
+  </motion.div>
 
       <div className="z-10 w-full max-w-[85rem] mx-auto flex flex-col lg:grid lg:grid-cols-12 gap-6 items-start justify-center">
         
