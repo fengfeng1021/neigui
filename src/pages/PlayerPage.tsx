@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UPSTASH_URL, READ_ONLY_TOKEN, HIDDEN_WRITE_TOKEN } from '../config';
-import { Send, Clock, List, Sparkles } from 'lucide-react';
+import { Send, Clock, List } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 const safeJSONParse = (data: any, fallback: any) => {
