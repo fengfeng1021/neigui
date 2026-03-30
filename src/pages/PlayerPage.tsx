@@ -76,9 +76,16 @@ export default function PlayerPage() {
 
   const fetchData = async () => {
     try {
+      // 獲取管理員手動懲罰池
       const resPool = await fetch(`${UPSTASH_URL}/get/punishment_list`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
-      const dataPool = await resPool.json();
-      setPunishments(safeJSONParse(dataPool.result, []));
+      const manualPool = safeJSONParse(await resPool.json().then((d: any) => d.result), []);
+
+      // 獲取自動通過懲罰池
+      const resAuto = await fetch(`${UPSTASH_URL}/get/auto_punishment_list`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
+      const autoPool = safeJSONParse(await resAuto.json().then((d: any) => d.result), []);
+
+      // 合併兩個池子作為前台抽獎用
+      setPunishments([...manualPool, ...autoPool]);
 
       const resHist = await fetch(`${UPSTASH_URL}/get/draw_history`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
       const dataHist = await resHist.json();
@@ -233,25 +240,80 @@ export default function PlayerPage() {
   const handleVote = async (id: string, type: 'up' | 'down') => {
     if (votedIds.includes(id)) return;
     
-    // 樂觀更新 UI (讓玩家立刻看到數字跳動)
-    setPendingList(prev => prev.map(p => 
-      p.id === id ? { ...p, upvotes: p.upvotes + (type === 'up' ? 1 : 0), downvotes: p.downvotes + (type === 'down' ? 1 : 0) } : p
-    ));
+    let isAutoApproved = false;
+    let approvedText = "";
+
+    // 1. 樂觀更新 UI
+    setPendingList(prev => {
+      let newList = prev.map(p => {
+        if (p.id === id) {
+          const newUpvotes = p.upvotes + (type === 'up' ? 1 : 0);
+          const newDownvotes = p.downvotes + (type === 'down' ? 1 : 0);
+          if (newUpvotes >= 10) {
+            isAutoApproved = true;
+            approvedText = p.text;
+          }
+          return { ...p, upvotes: newUpvotes, downvotes: newDownvotes };
+        }
+        return p;
+      });
+      
+      // 如果達標，直接從前台待審核清單移除
+      if (isAutoApproved) {
+        newList = newList.filter(p => p.id !== id);
+      }
+      return newList;
+    });
+
+    // 如果達標，樂觀更新到正式懲罰池 (前台馬上可以抽到)
+    if (isAutoApproved) {
+      setPunishments(prev => [...prev, approvedText]);
+    }
+
     const newVoted = [...votedIds, id];
     setVotedIds(newVoted);
     localStorage.setItem('valo_voted_ids', JSON.stringify(newVoted));
 
-    // 背景同步到資料庫
+    // 2. 背景同步到資料庫
     try {
       const res = await fetch(`${UPSTASH_URL}/get/pending_punishments`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
       let serverList = safeJSONParse((await res.json()).result, []).map((p: any) => typeof p === 'string' ? { id: Math.random().toString(36).substr(2, 9), text: p, upvotes: 0, downvotes: 0 } : p);
-      const updatedList = serverList.map((p: any) => p.id === id ? { ...p, upvotes: p.upvotes + (type === 'up' ? 1 : 0), downvotes: p.downvotes + (type === 'down' ? 1 : 0) } : p);
       
-      await fetch(`${UPSTASH_URL}/set/pending_punishments`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${HIDDEN_WRITE_TOKEN}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedList)
-      });
+      const targetIndex = serverList.findIndex((p: any) => p.id === id);
+      if (targetIndex !== -1) {
+        serverList[targetIndex].upvotes += (type === 'up' ? 1 : 0);
+        serverList[targetIndex].downvotes += (type === 'down' ? 1 : 0);
+        
+        if (serverList[targetIndex].upvotes >= 10) {
+          // 達到 10 票，自動通過
+          const textToAdd = serverList[targetIndex].text;
+          serverList.splice(targetIndex, 1); // 從待審核移除
+          
+          // 更新待審核
+          await fetch(`${UPSTASH_URL}/set/pending_punishments`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${HIDDEN_WRITE_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(serverList)
+          });
+          
+          // 加入自動通過專屬池
+          const resAuto = await fetch(`${UPSTASH_URL}/get/auto_punishment_list`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
+          const autoList = safeJSONParse((await resAuto.json()).result, []);
+          autoList.push(textToAdd);
+          await fetch(`${UPSTASH_URL}/set/auto_punishment_list`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${HIDDEN_WRITE_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(autoList)
+          });
+        } else {
+          // 未達 10 票，單純更新票數
+          await fetch(`${UPSTASH_URL}/set/pending_punishments`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${HIDDEN_WRITE_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(serverList)
+          });
+        }
+      }
     } catch (err) {}
   };
 

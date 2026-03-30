@@ -27,6 +27,11 @@ export default function AdminPage() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
 
+  // 新增：自動通過池的狀態
+  const [autoPunishments, setAutoPunishments] = useState<string[]>([]);
+  const [editingAutoIndex, setEditingAutoIndex] = useState<number | null>(null);
+  const [editAutoText, setEditAutoText] = useState("");
+
   useEffect(() => {
     const savedLogin = localStorage.getItem('valo_admin_logged_in');
     if (savedLogin === 'true') {
@@ -40,6 +45,10 @@ export default function AdminPage() {
       const resPool = await fetch(`${UPSTASH_URL}/get/punishment_list`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
       const dataPool = await resPool.json();
       setPunishments(safeJSONParse(dataPool.result, []));
+
+      const resAuto = await fetch(`${UPSTASH_URL}/get/auto_punishment_list`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
+      const dataAuto = await resAuto.json();
+      setAutoPunishments(safeJSONParse(dataAuto.result, []));
 
       const resPend = await fetch(`${UPSTASH_URL}/get/pending_punishments`, { headers: { Authorization: `Bearer ${READ_ONLY_TOKEN}` } });
       const dataPend = await resPend.json();
@@ -74,6 +83,7 @@ export default function AdminPage() {
     localStorage.removeItem('valo_admin_logged_in');
     setIsLoggedIn(false);
     setPunishments([]);
+    setAutoPunishments([]);
     setPendingList([]);
   };
 
@@ -117,6 +127,25 @@ export default function AdminPage() {
     const updated = punishments.filter((_, i) => i !== indexToDelete);
     await updateCloud('punishment_list', updated);
     setPunishments(updated);
+  };
+
+  const handleSaveAutoEdit = async (index: number) => {
+    if (!editAutoText.trim() || editAutoText === autoPunishments[index]) {
+      setEditingAutoIndex(null);
+      return;
+    }
+    const updated = [...autoPunishments];
+    updated[index] = editAutoText.trim();
+    await updateCloud('auto_punishment_list', updated);
+    setAutoPunishments(updated);
+    setEditingAutoIndex(null);
+    showStatus("修改成功", "success");
+  };
+
+  const handleDeleteAuto = async (indexToDelete: number) => {
+    const updated = autoPunishments.filter((_, i) => i !== indexToDelete);
+    await updateCloud('auto_punishment_list', updated);
+    setAutoPunishments(updated);
   };
 
   const handleApprove = async (index: number) => {
@@ -235,9 +264,10 @@ export default function AdminPage() {
               </form>
             </div>
 
-            <div className="bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl p-6 shadow-sm">
+            {/* 列表 1：管理員審核與手動添加 */}
+            <div className="bg-white/60 backdrop-blur-xl border border-purple-100 rounded-3xl p-6 shadow-sm">
               <div className="flex justify-between items-center mb-4">
-                <span className="text-sm text-gray-500 font-medium">当前正式惩罚池 ({punishments.length})</span>
+                <span className="text-sm font-bold text-purple-600 flex items-center gap-2">🛡️ 管理员专属惩罚池 ({punishments.length})</span>
                 <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 flex items-center gap-1 text-sm"><LogOut size={16} /> 退出登录</button>
               </div>
               <div className="flex flex-col gap-3">
@@ -245,17 +275,14 @@ export default function AdminPage() {
                   {punishments.length === 0 && <motion.div className="text-gray-400 text-center py-8">惩罚池为空。</motion.div>}
                   {punishments.map((p, index) => (
                     <motion.div key={index} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.9, backgroundColor: '#fecdd3' }}
-                      className="group flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white/80 p-4 rounded-2xl border border-transparent hover:border-pink-200 transition-all"
+                      className="group flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white/80 p-4 rounded-2xl border border-transparent hover:border-purple-200 transition-all"
                     >
                       {editingIndex === index ? (
                         <div className="flex flex-1 w-full gap-2 items-center">
                           <input 
-                            type="text" 
-                            value={editText} 
-                            onChange={(e) => setEditText(e.target.value)} 
+                            type="text" value={editText} onChange={(e) => setEditText(e.target.value)} 
                             className="flex-1 bg-white border border-purple-300 focus:border-purple-500 rounded-xl p-2 text-gray-800 outline-none text-sm font-bold w-full" 
-                            autoFocus
-                            onKeyDown={(e) => { if(e.key === 'Enter') handleSaveEdit(index); if(e.key === 'Escape') setEditingIndex(null); }}
+                            autoFocus onKeyDown={(e) => { if(e.key === 'Enter') handleSaveEdit(index); if(e.key === 'Escape') setEditingIndex(null); }}
                           />
                           <button onClick={() => handleSaveEdit(index)} className="text-green-500 hover:bg-green-50 p-2 rounded-lg transition-colors shrink-0"><Save size={18} /></button>
                           <button onClick={() => setEditingIndex(null)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-lg transition-colors shrink-0"><X size={18} /></button>
@@ -266,6 +293,45 @@ export default function AdminPage() {
                           <div className="flex gap-1 self-end sm:self-auto shrink-0 opacity-100 sm:opacity-50 sm:group-hover:opacity-100 transition-opacity">
                             <button onClick={() => { setEditingIndex(index); setEditText(p); }} className="text-gray-400 hover:text-blue-500 transition-colors p-2 rounded-lg hover:bg-blue-50" title="编辑"><Edit2 size={18} /></button>
                             <button onClick={() => handleDelete(index)} className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50" title="删除"><Trash2 size={18} /></button>
+                          </div>
+                        </>
+                      )}
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* 列表 2：玩家 10 票自動通過區 */}
+            <div className="bg-white/60 backdrop-blur-xl border border-pink-200 rounded-3xl p-6 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-pink-400"></div>
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-sm font-bold text-pink-600 flex items-center gap-2">✨ 玩家票选自动通过池 ({autoPunishments.length})</span>
+                <span className="text-xs text-gray-400">满 10 赞自动进入此区</span>
+              </div>
+              <div className="flex flex-col gap-3">
+                <AnimatePresence>
+                  {autoPunishments.length === 0 && <motion.div className="text-gray-400 text-center py-8">目前没有自动通过的惩罚。</motion.div>}
+                  {autoPunishments.map((p, index) => (
+                    <motion.div key={`auto-${index}`} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.9, backgroundColor: '#fecdd3' }}
+                      className="group flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white/80 p-4 rounded-2xl border border-transparent hover:border-pink-200 transition-all"
+                    >
+                      {editingAutoIndex === index ? (
+                        <div className="flex flex-1 w-full gap-2 items-center">
+                          <input 
+                            type="text" value={editAutoText} onChange={(e) => setEditAutoText(e.target.value)} 
+                            className="flex-1 bg-white border border-pink-300 focus:border-pink-500 rounded-xl p-2 text-gray-800 outline-none text-sm font-bold w-full" 
+                            autoFocus onKeyDown={(e) => { if(e.key === 'Enter') handleSaveAutoEdit(index); if(e.key === 'Escape') setEditingAutoIndex(null); }}
+                          />
+                          <button onClick={() => handleSaveAutoEdit(index)} className="text-green-500 hover:bg-green-50 p-2 rounded-lg transition-colors shrink-0"><Save size={18} /></button>
+                          <button onClick={() => setEditingAutoIndex(null)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-lg transition-colors shrink-0"><X size={18} /></button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="font-bold text-gray-700 break-words w-full sm:flex-1 pr-2 leading-relaxed">{p}</span>
+                          <div className="flex gap-1 self-end sm:self-auto shrink-0 opacity-100 sm:opacity-50 sm:group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => { setEditingAutoIndex(index); setEditAutoText(p); }} className="text-gray-400 hover:text-blue-500 transition-colors p-2 rounded-lg hover:bg-blue-50" title="编辑"><Edit2 size={18} /></button>
+                            <button onClick={() => handleDeleteAuto(index)} className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50" title="删除"><Trash2 size={18} /></button>
                           </div>
                         </>
                       )}
